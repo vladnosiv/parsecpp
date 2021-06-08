@@ -6,11 +6,15 @@
 
 int main() {
     using namespace Parser;
-    auto ch = spaces() >> alphaNum();
-    std::string str = "       1abc";
+    auto ch = spaces() >> seq(alphaNum(), charParser('+'));
+    std::string str = "     9+1+2+3+5";
     auto result = ch.eval(str);
     if (result.has_value()) {
-        std::cout << '\"' << str << '\"' << " Parsed. Right side: \"" << result.value().second << '\"' << std::endl;
+        std::cout << "Parsed\n";
+        auto v = result.value().first;
+        for (char c : v) {
+            std::cout << c << ' ';
+        }
     } else {
         std::cout << str << " Not parsed" << std::endl;
     }

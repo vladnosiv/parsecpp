@@ -69,19 +69,37 @@ namespace Parser {
         };
 
         template<typename T>
-        struct VManyParser : VParser<T> {
+        struct VManyParser : VParser<std::vector<T>> {
             explicit VManyParser(Parser<T> p) : parser(std::move(p)) {}
 
-            std::optional<std::pair<T, std::string>> eval(std::string str) override {
-                std::optional<std::pair<T, std::string>> result;
+            std::optional<std::pair<std::vector<T>, std::string>> eval(std::string str) override {
+                std::vector<T> results;
                 while (true) {
-                    auto current_result = parser.eval(str);
-                    if (!current_result.has_value()) {
-                        return result;
+                    auto current = parser.eval(str);
+                    if (!current.has_value()) {
+                        break;
                     }
-                    result = current_result;
-                    str = current_result.value().second;
+                    results.push_back(current.value().first);
+                    str = current.value().second;
                 }
+                return std::make_pair(results, str);
+            }
+        private:
+            Parser<T> parser;
+        };
+
+        // like VManyParser but ignores the second occurrence and beyond
+        template<typename T>
+        struct VManyIgnoreParser : VParser<T> {
+            explicit VManyIgnoreParser(Parser<T> p) : parser(std::move(p)) {}
+
+            std::optional<std::pair<T, std::string>> eval(std::string str) override {
+                auto many = Parser<std::vector<T>>(std::make_shared<Util::VManyParser<T>>(parser));
+                auto many_result = many.eval(str);
+                if (many_result.value().first.empty()) {
+                    return std::make_pair(0, many_result.value().second); //TODO: убрать костыль с чаром 0
+                }
+                return std::make_pair(many_result.value().first[0], many_result.value().second);
             }
         private:
             Parser<T> parser;
@@ -102,6 +120,30 @@ namespace Parser {
         private:
             Parser<U> skip_parser;
             Parser<T> parser;
+        };
+
+        template<typename T, typename U>
+        struct VSeqParser : VParser<std::vector<T>> {
+            explicit VSeqParser(Parser<T> elem_parser_, Parser<U> sep_parser_)
+                    : elem_parser(elem_parser_), sep_parser(sep_parser_) {}
+
+            std::optional<std::pair<std::vector<T>, std::string>> eval(std::string str) override {
+                auto head = elem_parser.eval(str);
+                if (!head.has_value()) {
+                    return std::nullopt;
+                }
+                std::vector<T> results = {head.value().first};
+                str = head.value().second;
+                auto tail_parser = many(sep_parser >> elem_parser);
+                auto tail = tail_parser.eval(str);
+                for (T t : tail.value().first) {
+                    results.push_back(t);
+                }
+                return std::make_pair(results, tail.value().second);
+            }
+        private:
+            Parser<T> elem_parser;
+            Parser<U> sep_parser;
         };
 
     } // namespace Util
@@ -140,8 +182,8 @@ namespace Parser {
     }
 
     template<typename T>
-    Parser<T> many(Parser<T> parser) {
-        return Parser<T>(std::make_shared<Util::VManyParser<T>>(std::move(parser)));
+    Parser<std::vector<T>> many(Parser<T> parser) {
+        return Parser<std::vector<T>>(std::make_shared<Util::VManyParser<T>>(std::move(parser)));
     }
 
     Parser<char> space() {
@@ -150,7 +192,7 @@ namespace Parser {
     }
 
     Parser<char> spaces() {
-        return many(space());
+        return Parser<char>(std::make_shared<Util::VManyIgnoreParser<char>>(space()));
     }
 
     Parser<char> alpha() {
@@ -171,6 +213,15 @@ namespace Parser {
 
     Parser<char> alphaNum() {
         return alpha() | num();
+    }
+
+    template<typename T, typename U>
+    Parser<std::vector<T>> seq(Parser<T> elem_parser, Parser<U> sep_parser) {
+        return Parser<std::vector<T>>(
+                std::make_shared<Util::VSeqParser<T, U>>(
+                        std::move(elem_parser), std::move(sep_parser)
+                )
+        );
     }
 
 } // namespace Parser
