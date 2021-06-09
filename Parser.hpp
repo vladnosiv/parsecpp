@@ -6,6 +6,7 @@
 #include <memory>
 #include <utility>
 #include <vector>
+#include <functional>
 
 namespace Parser {
 
@@ -146,6 +147,99 @@ namespace Parser {
             Parser<U> sep_parser;
         };
 
+        template<typename T, typename BL, typename BR>
+        struct VBrParser : VParser<T> {
+            explicit VBrParser(Parser<T> elem_parser_,
+                               Parser<BL> left_parser_,
+                               Parser<BR> right_parser_)
+                : elem_parser(elem_parser_), left_parser(left_parser_), right_parser(right_parser_) {}
+
+            std::optional<std::pair<T, std::string>> eval(std::string str) override {
+                std::cerr << "IN BR PARSER" << std::endl;
+                auto left_result = left_parser.eval(str);
+                if (!left_result.has_value()) {
+                    return std::nullopt;
+                }
+                str = left_result.value().second;
+                auto elem_result = elem_parser.eval(str);
+                if (!elem_result.has_value()) {
+                    return std::nullopt;
+                }
+                T result = elem_result.value().first;
+                str = elem_result.value().second;
+                auto right_result = right_parser.eval(str);
+                if (!right_result.has_value()) {
+                    return std::nullopt;
+                }
+                return std::make_pair(result, right_result.value().second);
+            }
+        private:
+            Parser<T> elem_parser;
+            Parser<BL> left_parser;
+            Parser<BR> right_parser;
+        };
+
+        // like VSeqParser but save separators too
+        template<typename T, typename U>
+        struct VSeqSaverParser : VParser<std::pair<std::vector<T>, std::vector<U>>> {
+            explicit VSeqSaverParser(Parser<T> elem_parser_, Parser<U> sep_parser_)
+                : elem_parser(elem_parser_), sep_parser(sep_parser_) {}
+
+            std::optional<std::pair<std::pair<std::vector<T>, std::vector<U>>, std::string>> eval(std::string str) override {
+                auto head = elem_parser.eval(str);
+                if (!head.has_value()) {
+                    return std::nullopt;
+                }
+                std::vector<T> results = {head.value().first};
+                std::vector<U> seps;
+                str = head.value().second;
+                while (true) {
+                    auto sep_result = sep_parser.eval(str);
+                    if (!sep_result.has_value()) {
+                        break;
+                    }
+                    auto elem_result = elem_parser.eval(sep_result.value().second);
+                    if (!elem_result.has_value()) {
+                        break;
+                    }
+                    str = elem_result.value().second;
+                    results.push_back(elem_result.value().first);
+                    seps.push_back(sep_result.value().first);
+                }
+                return std::make_pair(std::make_pair(results, seps), str);
+            }
+        private:
+            Parser<T> elem_parser;
+            Parser<U> sep_parser;
+        };
+
+        template<typename T, typename U>
+        struct VFoldParser : VParser<T> {
+            explicit VFoldParser(Parser<std::pair<std::vector<T>, std::vector<U>>> parser_, std::vector<std::pair<U, std::function<T(T, T)>>> operators_)
+                : parser(parser_), operators(operators_) {}
+
+            std::optional<std::pair<T, std::string>> eval(std::string str) override {
+                auto result = parser.eval(str);
+                if (!result.has_value()) {
+                    return std::nullopt;
+                }
+                auto [elements, seps] = result.value().first;
+                T t_result = elements[0];
+                for (std::size_t i = 1; i < elements.size(); ++i) {
+                    for (const auto& [op, func] : operators) {
+                        if (op == seps[i - 1]) {
+                            t_result = func(t_result, elements[i]);
+                            break;
+                        }
+                    }
+                }
+                return std::make_pair(t_result, result.value().second);
+            }
+        private:
+            Parser<std::pair<std::vector<T>, std::vector<U>>> parser;
+            std::vector<std::pair<U, std::function<T(T, T)>>> operators;
+        };
+
     } // namespace Util
 
 
@@ -222,6 +316,25 @@ namespace Parser {
                         std::move(elem_parser), std::move(sep_parser)
                 )
         );
+    }
+
+    template<typename T, typename U>
+    Parser<std::pair<std::vector<T>, std::vector<U>>> seq_save(Parser<T> elem_parser, Parser<U> sep_parser) {
+        return Parser<std::pair<std::vector<T>, std::vector<U>>>(
+                std::make_shared<Util::VSeqSaverParser<T, U>>(
+                        std::move(elem_parser), std::move(sep_parser)
+                )
+        );
+    }
+
+    template<typename T, typename BL, typename BR>
+    Parser<T> brackets_parser(Parser<T> elem_parser, Parser<BL> left_parser, Parser<BR> right_parser) {
+        return Parser<T>(std::make_shared<Util::VBrParser<T, BL, BR>>(std::move(elem_parser), std::move(left_parser), std::move(right_parser)));
+    }
+
+    template<typename T, typename U>
+    Parser<T> fold(Parser<std::pair<std::vector<T>, std::vector<U>>> vec_parser, std::vector<std::pair<U, std::function<T(T, T)>>> operators) {
+        return Parser<T>(std::make_shared<Util::VFoldParser<T, U>>(std::move(vec_parser), std::move(operators)));
     }
 
 } // namespace Parser

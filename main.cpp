@@ -1,21 +1,15 @@
-#include "Parser.hpp"
+#include "CalcParser.hpp"
 
 #include <string>
 #include <iostream>
-#include <optional>
 
 int main() {
-    using namespace Parser;
-    auto ch = spaces() >> seq(alphaNum(), charParser('+'));
-    std::string str = "     9+1+2+3+5";
-    auto result = ch.eval(str);
-    if (result.has_value()) {
-        std::cout << "Parsed\n";
-        auto v = result.value().first;
-        for (char c : v) {
-            std::cout << c << ' ';
-        }
+    auto parser = CalcParser::romanCalc();
+    std::string n = "MMMCCCXXI*MMMMMMMMMCXXIII/(II*IV+I)"; // 3321*9123/9 = 3366387
+    auto res = parser.eval(n);
+    if (res.has_value()) {
+        std::cout << res.value().first;
     } else {
-        std::cout << str << " Not parsed" << std::endl;
+        std::cout << "Not parsed.";
     }
 }
