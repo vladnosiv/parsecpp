@@ -8,7 +8,7 @@
 #include <vector>
 #include <functional>
 
-namespace Parser {
+namespace Parsec {
 
     template<typename T>
     struct Parser;
@@ -113,9 +113,10 @@ namespace Parser {
 
             std::optional<std::pair<T, std::string>> eval(std::string str) override {
                 auto res_skip = skip_parser.eval(str);
-                if (res_skip.has_value()) {
-                    str = res_skip.value().second;
+                if (!res_skip.has_value()) {
+                    return std::nullopt;
                 }
+                str = res_skip.value().second;
                 return parser.eval(str);
             }
         private:
@@ -155,7 +156,6 @@ namespace Parser {
                 : elem_parser(elem_parser_), left_parser(left_parser_), right_parser(right_parser_) {}
 
             std::optional<std::pair<T, std::string>> eval(std::string str) override {
-                std::cerr << "IN BR PARSER" << std::endl;
                 auto left_result = left_parser.eval(str);
                 if (!left_result.has_value()) {
                     return std::nullopt;
@@ -240,6 +240,52 @@ namespace Parser {
             std::vector<std::pair<U, std::function<T(T, T)>>> operators;
         };
 
+        template<typename T, typename R, typename Func>
+        struct VFMapParser : VParser<R> {
+            explicit VFMapParser(Parser<T> parser_, Func f_)
+                : parser(parser_), f(f_) {}
+
+            std::optional<std::pair<R, std::string>> eval(std::string str) override {
+                auto result = parser.eval(str);
+                if (!result.has_value()) {
+                    return std::nullopt;
+                }
+                return std::make_pair(f(result.value().first), result.value().second);
+            }
+        private:
+            Parser<T> parser;
+            Func f;
+        };
+
+        template<typename T>
+        struct VLazyParser : VParser<T> {
+            explicit VLazyParser(std::function<Parser<T>()> get_parser_)
+                : get_parser(std::move(get_parser_)) {}
+
+            std::optional<std::pair<T, std::string>> eval(std::string str) override {
+                return get_parser().eval(std::move(str));
+            }
+        private:
+            std::function<Parser<T>()> get_parser;
+        };
+
+        template<typename T>
+        struct VMaybeParser : VParser<T> {
+            explicit VMaybeParser(Parser<T> parser_, T default_value_)
+                : parser(parser_), default_value(default_value_) {}
+
+            std::optional<std::pair<T, std::string>> eval(std::string str) override {
+                auto result = parser.eval(str);
+                if (!result.has_value()) {
+                    return std::make_pair(default_value, str);
+                }
+                return result;
+            }
+        private:
+            Parser<T> parser;
+            T default_value;
+        };
+
     } // namespace Util
 
 
@@ -297,7 +343,7 @@ namespace Parser {
         return charsParser(alpha);
     }
 
-    Parser<char> num() {
+    Parser<char> maybe_num() {
         std::vector<char> digits;
         for (char c = '0'; c <= '9'; ++c) {
             digits.push_back(c);
@@ -306,7 +352,22 @@ namespace Parser {
     }
 
     Parser<char> alphaNum() {
-        return alpha() | num();
+        return alpha() | maybe_num();
+    }
+
+    template<typename T, typename Func>
+    Parser<T> mapParser(Parser<T> parser, Func f) {
+        return Parser<T>(std::make_shared<Util::VFMapParser<T, T, Func>>(std::move(parser), std::move(f)));
+    }
+
+    template<typename T, typename R, typename Func>
+    Parser<R> fmapParser(Parser<T> parser, Func f) {
+        return Parser<R>(std::make_shared<Util::VFMapParser<T, R, Func>>(std::move(parser), std::move(f)));
+    }
+
+    template<typename T>
+    Parser<T> maybe_parser(Parser<T> parser, T default_value) {
+        return Parser<T>(std::make_shared<Util::VMaybeParser<T>>(std::move(parser), std::move(default_value)));
     }
 
     template<typename T, typename U>
@@ -328,13 +389,18 @@ namespace Parser {
     }
 
     template<typename T, typename BL, typename BR>
-    Parser<T> brackets_parser(Parser<T> elem_parser, Parser<BL> left_parser, Parser<BR> right_parser) {
+    Parser<T> brackets_parser(Parser<BL> left_parser, Parser<T> elem_parser, Parser<BR> right_parser) {
         return Parser<T>(std::make_shared<Util::VBrParser<T, BL, BR>>(std::move(elem_parser), std::move(left_parser), std::move(right_parser)));
     }
 
     template<typename T, typename U>
     Parser<T> fold(Parser<std::pair<std::vector<T>, std::vector<U>>> vec_parser, std::vector<std::pair<U, std::function<T(T, T)>>> operators) {
         return Parser<T>(std::make_shared<Util::VFoldParser<T, U>>(std::move(vec_parser), std::move(operators)));
+    }
+
+    template<typename T>
+    Parser<T> lazyParser(std::function<Parser<T>()> get_parser) {
+        return Parser<T>(std::make_shared<Util::VLazyParser<T>>(std::move(get_parser)));
     }
 
 } // namespace Parser

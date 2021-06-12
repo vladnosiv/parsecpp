@@ -4,137 +4,68 @@
 
 namespace CalcParser {
 
-    /**
-     * Grammar.
-     *
-     * E -> T {+-} T
-     * T -> F {mlt div} F
-     * F -> RomanNum
-     * F -> -F
-     * F -> (E)
-     */
-
     namespace Util {
 
-        struct VRomanNumeralParser : Parser::Util::VParser<long long> {
-            std::optional<std::pair<long long, std::string>> eval(std::string str) override {
-                long long result = 0;
-                bool parsed = false, parsed_new_digit = true;
-                std::size_t str_index = 0;
-                while (parsed_new_digit) {
-                    parsed_new_digit = false;
-                    for (const auto& i : converting_table) {
-                        std::string digit = i.first;
-                        if (str_index + digit.size() <= str.size() && str[str_index] == digit[0]
-                            && (digit.size() == 1 || str[str_index + 1] == digit[1])) {
+        using namespace Parsec;
 
-                            parsed = parsed_new_digit = true;
-                            result += i.second;
-                            str_index += digit.size();
-                        }
-                    }
-                }
-                if (!parsed) {
-                    return std::nullopt;
-                }
-                return std::make_pair(result, str.substr(str_index));
-            }
-
-            const std::vector<std::pair<std::string, int>> converting_table = {
-                    {"M", 1000},
-                    {"CM", 900},
-                    {"D", 500},
-                    {"CD", 400},
-                    {"C", 100},
-                    {"XC", 90},
-                    {"L", 50},
-                    {"XL", 40},
-                    {"X", 10},
-                    {"IX", 9},
-                    {"V", 5},
-                    {"IV", 4},
-                    {"I", 1},
-                    {"Z", 0}
-            };
-        };
-
-        Parser::Parser<long long> romanNumeral() {
-            return Parser::Parser<long long>(std::make_shared<VRomanNumeralParser>());
+        Parser<int64_t> roman_numeral() {
+            Parser<int64_t> maybe_num = maybe_parser<int64_t>(lazyParser<int64_t>(roman_numeral), 0);
+            return mapParser(charParser('M')                    >> maybe_num, [](int64_t a) { return a + 1000; }) // M
+                 | mapParser(charParser('C') >> charParser('M') >> maybe_num, [](int64_t a) { return a + 900; })  // CM
+                 | mapParser(charParser('D')                    >> maybe_num, [](int64_t a) { return a + 500; })  // D
+                 | mapParser(charParser('C') >> charParser('D') >> maybe_num, [](int64_t a) { return a + 400; })  // CD
+                 | mapParser(charParser('C')                    >> maybe_num, [](int64_t a) { return a + 100; })  // C
+                 | mapParser(charParser('X') >> charParser('C') >> maybe_num, [](int64_t a) { return a + 90; })   // XC
+                 | mapParser(charParser('L')                    >> maybe_num, [](int64_t a) { return a + 50; })   // L
+                 | mapParser(charParser('X') >> charParser('L') >> maybe_num, [](int64_t a) { return a + 40; })   // XL
+                 | mapParser(charParser('X')                    >> maybe_num, [](int64_t a) { return a + 10; })   // X
+                 | mapParser(charParser('I') >> charParser('X') >> maybe_num, [](int64_t a) { return a + 9; })    // IX
+                 | mapParser(charParser('V')                    >> maybe_num, [](int64_t a) { return a + 5; })    // V
+                 | mapParser(charParser('I') >> charParser('V') >> maybe_num, [](int64_t a) { return a + 4;})     // IV
+                 | mapParser(charParser('I')                    >> maybe_num, [](int64_t a) { return a + 1; })    // I
+                 | fmapParser<char, int64_t>(charParser('Z'), [](char) { return 0; });                            // Z
         }
 
-        Parser::Parser<long long> romanExpr();
-        Parser::Parser<long long> romanAtom();
+        Parser<int64_t> roman_expr();
+        Parser<int64_t> roman_atom();
 
-        Parser::Parser<long long> romanUnaryMinusAtom() {
-            struct VUnaryMinusParser : Parser::Util::VParser<long long> {
-                std::optional<std::pair<long long, std::string>> eval(std::string s) override {
-                    auto res_minus = Parser::charParser('-').eval(s);
-                    if (!res_minus.has_value()) {
-                        return std::nullopt;
-                    }
-                    auto res = romanAtom().eval(res_minus.value().second);
-                    if (!res.has_value()) {
-                        return std::nullopt;
-                    }
-                    return std::make_pair(-res.value().first, res.value().second);
-                }
-            };
-            return Parser::Parser<long long>(std::make_shared<VUnaryMinusParser>());
+        Parser<int64_t> roman_unary_minus_atom() {
+            return mapParser(charParser('-') >> lazyParser<int64_t>(roman_atom), [](int64_t a) { return -a; });
         }
 
-        Parser::Parser<long long> romanBrackets() {
-            struct RomanBrParser : Parser::Util::VParser<long long> {
-                std::optional<std::pair<long long, std::string>> eval(std::string str) override {
-                    auto left_result = Parser::charParser('(').eval(str);
-                    if (!left_result.has_value()) {
-                        return std::nullopt;
-                    }
-                    str = left_result.value().second;
-                    auto elem_result = romanExpr().eval(str);
-                    if (!elem_result.has_value()) {
-                        return std::nullopt;
-                    }
-                    long long result = elem_result.value().first;
-                    str = elem_result.value().second;
-                    auto right_result = Parser::charParser(')').eval(str);
-                    if (!right_result.has_value()) {
-                        return std::nullopt;
-                    }
-                    return std::make_pair(result, right_result.value().second);
-                }
-            };
-            return Parser::Parser<long long>(std::make_shared<RomanBrParser>());
+        Parser<int64_t> roman_brackets() {
+            return brackets_parser(charParser('('), lazyParser<int64_t>(roman_expr), charParser(')'));
         }
 
-        Parser::Parser<long long> romanAtom() {
-            return romanNumeral() | romanUnaryMinusAtom() | romanBrackets();
+        Parser<int64_t> roman_atom() {
+            return roman_numeral() | roman_unary_minus_atom() | roman_brackets();
         }
 
-        Parser::Parser<long long> romanMltDiv() {
-            return Parser::fold(
-                Parser::seq_save(romanAtom(), Parser::charParser('*') | Parser::charParser('/')),
+        Parser<int64_t> roman_mlt_div() {
+            return fold(
+                seq_save(roman_atom(), charParser('*') | charParser('/')),
                 {
-                        {'*', [](long long a, long long b) { return a * b; }},
-                        {'/', [](long long a, long long b) { return a / b; }}
+                        {'*', [](int64_t a, int64_t b) { return a * b; }},
+                        {'/', [](int64_t a, int64_t b) { return a / b; }}
                 }
                 // В условии явно не написано, но судя по строчке про вычисления в лонгах, деление целочисленное
             );
         }
 
-        Parser::Parser<long long> romanExpr() {
-            return Parser::fold(
-                Parser::seq_save(romanMltDiv(), Parser::charParser('+') | Parser::charParser('-')),
+        Parser<int64_t> roman_expr() {
+            return fold(
+                seq_save(roman_mlt_div(), charParser('+') | charParser('-')),
                 {
-                        {'+', [](long long a, long long b) -> long long { return a + b; }},
-                        {'-', [](long long a, long long b) -> long long { return a - b; }}
+                        {'+', [](int64_t a, int64_t b) { return a + b; }},
+                        {'-', [](int64_t a, int64_t b) { return a - b; }}
                 }
             );
         }
 
     } // namespace Util
 
-    Parser::Parser<long long> romanCalc() {
-        return Util::romanExpr();
+    Parsec::Parser<int64_t> roman_calc() {
+        return Util::roman_expr();
     }
 
 } // namespace CalcParser
