@@ -26,7 +26,7 @@ namespace CalcParser {
                  | map_parser(char_parser('V') >> maybe_num,                     [](int64_t a) { return a + 5; })    // V
                  | map_parser(char_parser('I') >> char_parser('V') >> maybe_num, [](int64_t a) { return a + 4; })    // IV
                  | map_parser(char_parser('I') >> maybe_num,                     [](int64_t a) { return a + 1; })    // I
-                 | fmap_parser<char, int64_t>(char_parser('Z'), [](char) { return 0; });                   // Z
+                 | fmap_parser<char, int64_t>(char_parser('Z'), [](char) { return 0; });                             // Z
         }
 
         Parser<int64_t> roman_expr();
@@ -51,7 +51,6 @@ namespace CalcParser {
                         {'*', [](int64_t a, int64_t b) { return a * b; }},
                         {'/', [](int64_t a, int64_t b) { return a / b; }}
                 }
-                // В условии явно не написано, но судя по строчке про вычисления в int64, деление целочисленное
             );
         }
 
@@ -65,7 +64,7 @@ namespace CalcParser {
             );
         }
 
-    } // namespace Util
+    } // namespace Internal
 
     Parsec::Parser<int64_t> roman_calc() {
         return Util::roman_expr();

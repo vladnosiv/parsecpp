@@ -5,21 +5,21 @@ namespace Parsec {
     template<typename T>
     struct Parser;
 
-    namespace Util {
+    namespace Internal {
 
         template<typename T>
         struct Result {
             explicit Result() = default;
-            explicit Result(T t, std::string s)
-                : tvalue(std::move(t)), srest(std::move(s)), has_value(true) {}
+            explicit Result(T t, std::string_view s)
+                : tvalue(std::move(t)), srest(s), has_value(true) {}
 
             explicit operator bool() { return has_value; }
             T value() { return tvalue; }
-            std::string rest() { return srest; }
+            std::string_view rest() { return srest; }
 
         private:
             T tvalue;
-            std::string srest;
+            std::string_view srest;
             bool has_value = false;
         };
 
@@ -28,7 +28,7 @@ namespace Parsec {
 
         template<typename T>
         struct IParser {
-            virtual Result<T> parse(std::string) = 0;
+            virtual Result<T> parse(std::string_view) = 0;
         };
 
         template<typename T>
@@ -36,7 +36,7 @@ namespace Parsec {
             IAlternativeParser(Parser<T> fst_, Parser<T> snd_)
                     : fst(std::move(fst_)), snd(std::move(snd_)) {}
 
-            Result<T> parse(std::string s) override {
+            Result<T> parse(std::string_view s) override {
                 auto fst_result = fst.parse(s);
                 if (fst_result) {
                     return fst_result;
@@ -51,12 +51,12 @@ namespace Parsec {
         struct ICharParser : IParser<char> {
             explicit ICharParser(char target_) : target(target_) {}
 
-            Result<char> parse(std::string str) override {
+            Result<char> parse(std::string_view str) override {
                 if (str.empty() || str[0] != target) {
                     return nullres<char>();
                 }
-                std::string rest = str.substr(1);
-                return Result<char>{target, std::move(rest)};
+                std::string_view rest = str.substr(1);
+                return Result<char>{target, rest};
             }
 
         private:
@@ -66,14 +66,14 @@ namespace Parsec {
         struct ICharsParser : IParser<char> {
             explicit ICharsParser(std::vector<char> chars) : targets(std::move(chars)) {}
 
-            Result<char> parse(std::string str) override {
+            Result<char> parse(std::string_view str) override {
                 if (str.empty()) {
                     return nullres<char>();
                 }
                 for (char c : targets) {
                     if (str[0] == c) {
-                        std::string rest = str.substr(1);
-                        return Result<char>{c, std::move(rest)};
+                        std::string_view rest = str.substr(1);
+                        return Result<char>{c, rest};
                     }
                 }
                 return nullres<char>();
@@ -87,7 +87,7 @@ namespace Parsec {
         struct IManyParser : IParser<std::vector<T>> {
             explicit IManyParser(Parser<T> p) : parser(std::move(p)) {}
 
-            Result<std::vector<T>> parse(std::string str) override {
+            Result<std::vector<T>> parse(std::string_view str) override {
                 std::vector<T> results;
                 while (true) {
                     auto current_res = parser.parse(str);
@@ -108,8 +108,8 @@ namespace Parsec {
         struct IManyIgnoreParser : IParser<T> {
             explicit IManyIgnoreParser(Parser<T> p) : parser(std::move(p)) {}
 
-            Result<T> parse(std::string str) override {
-                auto many = Parser<std::vector<T>>(std::make_shared<Util::IManyParser<T>>(parser));
+            Result<T> parse(std::string_view str) override {
+                auto many = Parser<std::vector<T>>(std::make_shared<Internal::IManyParser<T>>(parser));
                 auto many_result = many.parse(str);
                 if (many_result.value().empty()) {
                     return Result<T>{0, many_result.rest()};
@@ -125,7 +125,7 @@ namespace Parsec {
             explicit ISkipParser(Parser<U> skip_parser_, Parser<T> parser_)
                     : skip_parser(skip_parser_), parser(parser_) {}
 
-            Result<T> parse(std::string str) override {
+            Result<T> parse(std::string_view str) override {
                 auto res_skip = skip_parser.parse(str);
                 if (!res_skip) {
                     return nullres<T>();
@@ -143,7 +143,7 @@ namespace Parsec {
             explicit ISeqParser(Parser<T> elem_parser_, Parser<U> sep_parser_)
                     : elem_parser(elem_parser_), sep_parser(sep_parser_) {}
 
-            Result<std::vector<T>> parse(std::string str) override {
+            Result<std::vector<T>> parse(std::string_view str) override {
                 auto head = elem_parser.parse(str);
                 if (!head) {
                     return nullres<std::vector<T>>();
@@ -169,7 +169,7 @@ namespace Parsec {
                                Parser<BR> right_parser_)
                     : elem_parser(elem_parser_), left_parser(left_parser_), right_parser(right_parser_) {}
 
-            Result<T> parse(std::string str) override {
+            Result<T> parse(std::string_view str) override {
                 auto left_result = left_parser.parse(str);
                 if (!left_result) {
                     return nullres<T>();
@@ -213,7 +213,7 @@ namespace Parsec {
             explicit ISeqSaverParser(Parser<T> elem_parser_, Parser<U> sep_parser_)
                     : elem_parser(elem_parser_), sep_parser(sep_parser_) {}
 
-            Result<SeqWithSeps<T, U>> parse(std::string str) override {
+            Result<SeqWithSeps<T, U>> parse(std::string_view str) override {
                 auto head = elem_parser.parse(str);
                 if (!head) {
                     return nullres<SeqWithSeps<T, U>>();
@@ -246,7 +246,7 @@ namespace Parsec {
             explicit IFoldParser(Parser<SeqWithSeps<T, U>> parser_, std::vector<std::pair<U, std::function<T(T, T)>>> operators_)
             : parser(parser_), operators(operators_) {}
 
-            Result<T> parse(std::string str) override {
+            Result<T> parse(std::string_view str) override {
                 auto result = parser.parse(str);
                 if (!result) {
                     return nullres<T>();
@@ -274,7 +274,7 @@ namespace Parsec {
             explicit IFMapParser(Parser<T> parser_, Func f_)
                     : parser(parser_), f(f_) {}
 
-            Result<R> parse(std::string str) override {
+            Result<R> parse(std::string_view str) override {
                 auto result = parser.parse(str);
                 if (!result) {
                     return nullres<R>();
@@ -291,8 +291,8 @@ namespace Parsec {
             explicit ILazyParser(std::function<Parser<T>()> get_parser_)
                     : get_parser(std::move(get_parser_)) {}
 
-            Result<T> parse(std::string str) override {
-                return get_parser().parse(std::move(str));
+            Result<T> parse(std::string_view str) override {
+                return get_parser().parse(str);
             }
         private:
             std::function<Parser<T>()> get_parser;
@@ -303,7 +303,7 @@ namespace Parsec {
             explicit IMaybeParser(Parser<T> parser_, T default_value_)
                     : parser(parser_), default_value(default_value_) {}
 
-            Result<T> parse(std::string str) override {
+            Result<T> parse(std::string_view str) override {
                 auto result = parser.parse(str);
                 if (!result) {
                     return Result<T>{default_value, str};
@@ -315,6 +315,6 @@ namespace Parsec {
             T default_value;
         };
 
-    } // namespace Util
+    } // namespace Internal
 
 } // namespace Parsec
