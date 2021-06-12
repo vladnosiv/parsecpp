@@ -14,48 +14,53 @@ namespace Parsec {
 
     template<typename T>
     struct Parser {
-        explicit Parser(std::shared_ptr<Util::VParser<T>> ptr) {
+        explicit Parser(std::shared_ptr<Util::IParser<T>> ptr) {
             parser = ptr;
         }
 
-        Util::Result<T> eval(std::string s) {
-            return parser->eval(std::move(s));
+        Util::Result<T> parse(std::string s) {
+            return parser->parse(std::move(s));
         }
 
     private:
-        std::shared_ptr<Util::VParser<T>> parser;
+        std::shared_ptr<Util::IParser<T>> parser;
     };
+
+    template<typename T, typename R, typename... Args>
+    Parser<T> make_parser(Args&&... args) {
+        return Parser<T>(std::make_shared<R>(std::forward<Args>(args)...));
+    }
 
     template<typename T>
     Parser<T> operator|(Parser<T> alt1, Parser<T> alt2) {
-        return Parser<T>(std::make_shared<Util::VAlternativeParser<T>>(alt1, alt2));
+        return make_parser<T, Util::IAlternativeParser<T>>(alt1, alt2);
     }
 
     template<typename U, typename T>
     Parser<T> operator>>(Parser<U> skip_parser, Parser<T> parser) {
-        return Parser<T>(std::make_shared<Util::VSkipParser<U, T>>(skip_parser, parser));
+        return make_parser<T, Util::ISkipParser<U, T>>(skip_parser, parser);
     }
 
-    Parser<char> charParser(char c) {
-        return Parser<char>(std::make_shared<Util::VCharParser>(c));
+    Parser<char> char_parser(char c) {
+        return make_parser<char, Util::ICharParser>(c);
     }
 
-    Parser<char> charsParser(std::vector<char> chars) {
-        return Parser<char>(std::make_shared<Util::VCharsParser>(std::move(chars)));
+    Parser<char> chars_alt_parser(std::vector<char> chars) {
+        return make_parser<char, Util::ICharsParser>(std::move(chars));
     }
 
     template<typename T>
     Parser<std::vector<T>> many(Parser<T> parser) {
-        return Parser<std::vector<T>>(std::make_shared<Util::VManyParser<T>>(std::move(parser)));
+        return make_parser<std::vector<T>, Util::IManyParser<T>>(std::move(parser));
     }
 
     Parser<char> space() {
         //TODO: maybe more special symbols
-        return charsParser({' ', '\t'});
+        return chars_alt_parser({' ', '\t'});
     }
 
     Parser<char> spaces() {
-        return Parser<char>(std::make_shared<Util::VManyIgnoreParser<char>>(space()));
+        return make_parser<char, Util::IManyIgnoreParser<char>>(space());
     }
 
     Parser<char> alpha() {
@@ -63,7 +68,7 @@ namespace Parsec {
         for (char c = 'a'; c <= 'z'; ++c) {
             alpha.push_back(c);
         }
-        return charsParser(alpha);
+        return chars_alt_parser(alpha);
     }
 
     Parser<char> maybe_num() {
@@ -71,59 +76,54 @@ namespace Parsec {
         for (char c = '0'; c <= '9'; ++c) {
             digits.push_back(c);
         }
-        return charsParser(digits);
+        return chars_alt_parser(digits);
     }
 
-    Parser<char> alphaNum() {
+    Parser<char> alpha_num() {
         return alpha() | maybe_num();
     }
 
     template<typename T, typename Func>
-    Parser<T> mapParser(Parser<T> parser, Func f) {
-        return Parser<T>(std::make_shared<Util::VFMapParser<T, T, Func>>(std::move(parser), std::move(f)));
+    Parser<T> map_parser(Parser<T> parser, Func f) {
+        return make_parser<T, Util::IFMapParser<T, T, Func>>(std::move(parser), std::move(f));
     }
 
     template<typename T, typename R, typename Func>
-    Parser<R> fmapParser(Parser<T> parser, Func f) {
-        return Parser<R>(std::make_shared<Util::VFMapParser<T, R, Func>>(std::move(parser), std::move(f)));
+    Parser<R> fmap_parser(Parser<T> parser, Func f) {
+        return make_parser<R, Util::IFMapParser<T, R, Func>>(std::move(parser), std::move(f));
     }
 
     template<typename T>
     Parser<T> maybe_parser(Parser<T> parser, T default_value) {
-        return Parser<T>(std::make_shared<Util::VMaybeParser<T>>(std::move(parser), std::move(default_value)));
+        return make_parser<T, Util::IMaybeParser<T>>(std::move(parser), std::move(default_value));
     }
 
     template<typename T, typename U>
     Parser<std::vector<T>> seq(Parser<T> elem_parser, Parser<U> sep_parser) {
-        return Parser<std::vector<T>>(
-                std::make_shared<Util::VSeqParser<T, U>>(
-                        std::move(elem_parser), std::move(sep_parser)
-                )
-        );
+        return make_parser<std::vector<T>, Util::ISeqParser<T, U>>
+                (std::move(elem_parser), std::move(sep_parser));
     }
 
     template<typename T, typename U>
     Parser<std::pair<std::vector<T>, std::vector<U>>> seq_save(Parser<T> elem_parser, Parser<U> sep_parser) {
-        return Parser<std::pair<std::vector<T>, std::vector<U>>>(
-                std::make_shared<Util::VSeqSaverParser<T, U>>(
-                        std::move(elem_parser), std::move(sep_parser)
-                )
-        );
+        return make_parser<std::pair<std::vector<T>, std::vector<U>>,
+                           Util::ISeqSaverParser<T, U>>
+                (std::move(elem_parser), std::move(sep_parser));
     }
 
     template<typename T, typename BL, typename BR>
     Parser<T> brackets_parser(Parser<BL> left_parser, Parser<T> elem_parser, Parser<BR> right_parser) {
-        return Parser<T>(std::make_shared<Util::VBrParser<T, BL, BR>>(std::move(elem_parser), std::move(left_parser), std::move(right_parser)));
+        return make_parser<T, Util::IBrParser<T, BL, BR>>(std::move(elem_parser), std::move(left_parser), std::move(right_parser));
     }
 
     template<typename T, typename U>
     Parser<T> fold(Parser<std::pair<std::vector<T>, std::vector<U>>> vec_parser, std::vector<std::pair<U, std::function<T(T, T)>>> operators) {
-        return Parser<T>(std::make_shared<Util::VFoldParser<T, U>>(std::move(vec_parser), std::move(operators)));
+        return make_parser<T, Util::IFoldParser<T, U>>(std::move(vec_parser), std::move(operators));
     }
 
     template<typename T>
-    Parser<T> lazyParser(std::function<Parser<T>()> get_parser) {
-        return Parser<T>(std::make_shared<Util::VLazyParser<T>>(std::move(get_parser)));
+    Parser<T> lazy_parser(std::function<Parser<T>()> get_parser) {
+        return make_parser<T, Util::ILazyParser<T>>(std::move(get_parser));
     }
 
 } // namespace Parser

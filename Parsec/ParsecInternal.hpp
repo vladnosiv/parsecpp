@@ -27,31 +27,31 @@ namespace Parsec {
         Result<T> nullres() { return Result<T>(); }
 
         template<typename T>
-        struct VParser {
-            virtual Result<T> eval(std::string) = 0;
+        struct IParser {
+            virtual Result<T> parse(std::string) = 0;
         };
 
         template<typename T>
-        struct VAlternativeParser : VParser<T> {
-            VAlternativeParser(Parser<T> fst_, Parser<T> snd_)
+        struct IAlternativeParser : IParser<T> {
+            IAlternativeParser(Parser<T> fst_, Parser<T> snd_)
                     : fst(std::move(fst_)), snd(std::move(snd_)) {}
 
-            Result<T> eval(std::string s) override {
-                auto fst_result = fst.eval(s);
+            Result<T> parse(std::string s) override {
+                auto fst_result = fst.parse(s);
                 if (fst_result) {
                     return fst_result;
                 }
-                return snd.eval(s);
+                return snd.parse(s);
             }
 
         private:
             Parser<T> fst, snd;
         };
 
-        struct VCharParser : VParser<char> {
-            explicit VCharParser(char target_) : target(target_) {}
+        struct ICharParser : IParser<char> {
+            explicit ICharParser(char target_) : target(target_) {}
 
-            Result<char> eval(std::string str) override {
+            Result<char> parse(std::string str) override {
                 if (str.empty() || str[0] != target) {
                     return nullres<char>();
                 }
@@ -63,10 +63,10 @@ namespace Parsec {
             char target = 0;
         };
 
-        struct VCharsParser : VParser<char> {
-            explicit VCharsParser(std::vector<char> chars) : targets(std::move(chars)) {}
+        struct ICharsParser : IParser<char> {
+            explicit ICharsParser(std::vector<char> chars) : targets(std::move(chars)) {}
 
-            Result<char> eval(std::string str) override {
+            Result<char> parse(std::string str) override {
                 if (str.empty()) {
                     return nullres<char>();
                 }
@@ -84,13 +84,13 @@ namespace Parsec {
         };
 
         template<typename T>
-        struct VManyParser : VParser<std::vector<T>> {
-            explicit VManyParser(Parser<T> p) : parser(std::move(p)) {}
+        struct IManyParser : IParser<std::vector<T>> {
+            explicit IManyParser(Parser<T> p) : parser(std::move(p)) {}
 
-            Result<std::vector<T>> eval(std::string str) override {
+            Result<std::vector<T>> parse(std::string str) override {
                 std::vector<T> results;
                 while (true) {
-                    auto current_res = parser.eval(str);
+                    auto current_res = parser.parse(str);
                     if (!current_res) {
                         break;
                     }
@@ -103,16 +103,16 @@ namespace Parsec {
             Parser<T> parser;
         };
 
-        // like VManyParser but ignores the second occurrence and beyond
+        // like IManyParser but ignores the second occurrence and beyond
         template<typename T>
-        struct VManyIgnoreParser : VParser<T> {
-            explicit VManyIgnoreParser(Parser<T> p) : parser(std::move(p)) {}
+        struct IManyIgnoreParser : IParser<T> {
+            explicit IManyIgnoreParser(Parser<T> p) : parser(std::move(p)) {}
 
-            Result<T> eval(std::string str) override {
-                auto many = Parser<std::vector<T>>(std::make_shared<Util::VManyParser<T>>(parser));
-                auto many_result = many.eval(str);
+            Result<T> parse(std::string str) override {
+                auto many = Parser<std::vector<T>>(std::make_shared<Util::IManyParser<T>>(parser));
+                auto many_result = many.parse(str);
                 if (many_result.value().empty()) {
-                    return Result<T>{0, many_result.rest()}; //TODO: убрать костыль с чаром 0
+                    return Result<T>{0, many_result.rest()};
                 }
                 return Result<T>{many_result.value()[0], many_result.rest()};
             }
@@ -121,17 +121,17 @@ namespace Parsec {
         };
 
         template<typename U, typename T>
-        struct VSkipParser : VParser<T> {
-            explicit VSkipParser(Parser<U> skip_parser_, Parser<T> parser_)
+        struct ISkipParser : IParser<T> {
+            explicit ISkipParser(Parser<U> skip_parser_, Parser<T> parser_)
                     : skip_parser(skip_parser_), parser(parser_) {}
 
-            Result<T> eval(std::string str) override {
-                auto res_skip = skip_parser.eval(str);
+            Result<T> parse(std::string str) override {
+                auto res_skip = skip_parser.parse(str);
                 if (!res_skip) {
                     return nullres<T>();
                 }
                 str = res_skip.rest();
-                return parser.eval(str);
+                return parser.parse(str);
             }
         private:
             Parser<U> skip_parser;
@@ -139,19 +139,19 @@ namespace Parsec {
         };
 
         template<typename T, typename U>
-        struct VSeqParser : VParser<std::vector<T>> {
-            explicit VSeqParser(Parser<T> elem_parser_, Parser<U> sep_parser_)
+        struct ISeqParser : IParser<std::vector<T>> {
+            explicit ISeqParser(Parser<T> elem_parser_, Parser<U> sep_parser_)
                     : elem_parser(elem_parser_), sep_parser(sep_parser_) {}
 
-            Result<std::vector<T>> eval(std::string str) override {
-                auto head = elem_parser.eval(str);
+            Result<std::vector<T>> parse(std::string str) override {
+                auto head = elem_parser.parse(str);
                 if (!head) {
                     return nullres<std::vector<T>>();
                 }
                 std::vector<T> results = {head.value()};
                 str = head.rest();
                 auto tail_parser = many(sep_parser >> elem_parser);
-                auto tail = tail_parser.eval(str);
+                auto tail = tail_parser.parse(str);
                 for (T t : tail.value()) {
                     results.push_back(t);
                 }
@@ -163,25 +163,25 @@ namespace Parsec {
         };
 
         template<typename T, typename BL, typename BR>
-        struct VBrParser : VParser<T> {
-            explicit VBrParser(Parser<T> elem_parser_,
+        struct IBrParser : IParser<T> {
+            explicit IBrParser(Parser<T> elem_parser_,
                                Parser<BL> left_parser_,
                                Parser<BR> right_parser_)
                     : elem_parser(elem_parser_), left_parser(left_parser_), right_parser(right_parser_) {}
 
-            Result<T> eval(std::string str) override {
-                auto left_result = left_parser.eval(str);
+            Result<T> parse(std::string str) override {
+                auto left_result = left_parser.parse(str);
                 if (!left_result) {
                     return nullres<T>();
                 }
                 str = left_result.rest();
-                auto elem_result = elem_parser.eval(str);
+                auto elem_result = elem_parser.parse(str);
                 if (!elem_result) {
                     return nullres<T>();
                 }
                 T result = elem_result.value();
                 str = elem_result.rest();
-                auto right_result = right_parser.eval(str);
+                auto right_result = right_parser.parse(str);
                 if (!right_result) {
                     return nullres<T>();
                 }
@@ -193,14 +193,14 @@ namespace Parsec {
             Parser<BR> right_parser;
         };
 
-        // like VSeqParser but save separators too
+        // like ISeqParser but save separators too
         template<typename T, typename U>
-        struct VSeqSaverParser : VParser<std::pair<std::vector<T>, std::vector<U>>> {
-            explicit VSeqSaverParser(Parser<T> elem_parser_, Parser<U> sep_parser_)
+        struct ISeqSaverParser : IParser<std::pair<std::vector<T>, std::vector<U>>> {
+            explicit ISeqSaverParser(Parser<T> elem_parser_, Parser<U> sep_parser_)
                     : elem_parser(elem_parser_), sep_parser(sep_parser_) {}
 
-            Result<std::pair<std::vector<T>, std::vector<U>>> eval(std::string str) override {
-                auto head = elem_parser.eval(str);
+            Result<std::pair<std::vector<T>, std::vector<U>>> parse(std::string str) override {
+                auto head = elem_parser.parse(str);
                 if (!head) {
                     return nullres<std::pair<std::vector<T>, std::vector<U>>>();
                 }
@@ -208,11 +208,11 @@ namespace Parsec {
                 std::vector<U> seps;
                 str = head.rest();
                 while (true) {
-                    auto sep_result = sep_parser.eval(str);
+                    auto sep_result = sep_parser.parse(str);
                     if (!sep_result) {
                         break;
                     }
-                    auto elem_result = elem_parser.eval(sep_result.rest());
+                    auto elem_result = elem_parser.parse(sep_result.rest());
                     if (!elem_result) {
                         break;
                     }
@@ -228,12 +228,12 @@ namespace Parsec {
         };
 
         template<typename T, typename U>
-        struct VFoldParser : VParser<T> {
-            explicit VFoldParser(Parser<std::pair<std::vector<T>, std::vector<U>>> parser_, std::vector<std::pair<U, std::function<T(T, T)>>> operators_)
+        struct IFoldParser : IParser<T> {
+            explicit IFoldParser(Parser<std::pair<std::vector<T>, std::vector<U>>> parser_, std::vector<std::pair<U, std::function<T(T, T)>>> operators_)
             : parser(parser_), operators(operators_) {}
 
-            Result<T> eval(std::string str) override {
-                auto result = parser.eval(str);
+            Result<T> parse(std::string str) override {
+                auto result = parser.parse(str);
                 if (!result) {
                     return nullres<T>();
                 }
@@ -255,12 +255,12 @@ namespace Parsec {
         };
 
         template<typename T, typename R, typename Func>
-        struct VFMapParser : VParser<R> {
-            explicit VFMapParser(Parser<T> parser_, Func f_)
+        struct IFMapParser : IParser<R> {
+            explicit IFMapParser(Parser<T> parser_, Func f_)
                     : parser(parser_), f(f_) {}
 
-            Result<R> eval(std::string str) override {
-                auto result = parser.eval(str);
+            Result<R> parse(std::string str) override {
+                auto result = parser.parse(str);
                 if (!result) {
                     return nullres<R>();
                 }
@@ -272,24 +272,24 @@ namespace Parsec {
         };
 
         template<typename T>
-        struct VLazyParser : VParser<T> {
-            explicit VLazyParser(std::function<Parser<T>()> get_parser_)
+        struct ILazyParser : IParser<T> {
+            explicit ILazyParser(std::function<Parser<T>()> get_parser_)
                     : get_parser(std::move(get_parser_)) {}
 
-            Result<T> eval(std::string str) override {
-                return get_parser().eval(std::move(str));
+            Result<T> parse(std::string str) override {
+                return get_parser().parse(std::move(str));
             }
         private:
             std::function<Parser<T>()> get_parser;
         };
 
         template<typename T>
-        struct VMaybeParser : VParser<T> {
-            explicit VMaybeParser(Parser<T> parser_, T default_value_)
+        struct IMaybeParser : IParser<T> {
+            explicit IMaybeParser(Parser<T> parser_, T default_value_)
                     : parser(parser_), default_value(default_value_) {}
 
-            Result<T> eval(std::string str) override {
-                auto result = parser.eval(str);
+            Result<T> parse(std::string str) override {
+                auto result = parser.parse(str);
                 if (!result) {
                     return Result<T>{default_value, str};
                 }
