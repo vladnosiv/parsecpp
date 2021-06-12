@@ -193,16 +193,30 @@ namespace Parsec {
             Parser<BR> right_parser;
         };
 
+        // wrap pair<vector, vector> for SeqSaver
+        template<typename T, typename U>
+        struct SeqWithSeps {
+            SeqWithSeps() = default;
+            SeqWithSeps(std::vector<T> elems_, std::vector<U> seps_)
+                : ielems(std::move(elems_)), iseps(std::move(seps_)) {}
+
+            std::vector<T> elems() { return ielems; }
+            std::vector<U> seps() { return iseps; }
+        private:
+            std::vector<T> ielems;
+            std::vector<U> iseps;
+        };
+
         // like ISeqParser but save separators too
         template<typename T, typename U>
-        struct ISeqSaverParser : IParser<std::pair<std::vector<T>, std::vector<U>>> {
+        struct ISeqSaverParser : IParser<SeqWithSeps<T, U>> {
             explicit ISeqSaverParser(Parser<T> elem_parser_, Parser<U> sep_parser_)
                     : elem_parser(elem_parser_), sep_parser(sep_parser_) {}
 
-            Result<std::pair<std::vector<T>, std::vector<U>>> parse(std::string str) override {
+            Result<SeqWithSeps<T, U>> parse(std::string str) override {
                 auto head = elem_parser.parse(str);
                 if (!head) {
-                    return nullres<std::pair<std::vector<T>, std::vector<U>>>();
+                    return nullres<SeqWithSeps<T, U>>();
                 }
                 std::vector<T> results = {head.value()};
                 std::vector<U> seps;
@@ -220,7 +234,7 @@ namespace Parsec {
                     results.push_back(elem_result.value());
                     seps.push_back(sep_result.value());
                 }
-                return Result<std::pair<std::vector<T>, std::vector<U>>>{std::make_pair(results, seps), str};
+                return Result<SeqWithSeps<T, U>>{SeqWithSeps(results, seps), str};
             }
         private:
             Parser<T> elem_parser;
@@ -229,7 +243,7 @@ namespace Parsec {
 
         template<typename T, typename U>
         struct IFoldParser : IParser<T> {
-            explicit IFoldParser(Parser<std::pair<std::vector<T>, std::vector<U>>> parser_, std::vector<std::pair<U, std::function<T(T, T)>>> operators_)
+            explicit IFoldParser(Parser<SeqWithSeps<T, U>> parser_, std::vector<std::pair<U, std::function<T(T, T)>>> operators_)
             : parser(parser_), operators(operators_) {}
 
             Result<T> parse(std::string str) override {
@@ -237,7 +251,8 @@ namespace Parsec {
                 if (!result) {
                     return nullres<T>();
                 }
-                auto [elements, seps] = result.value();
+                auto elements = result.value().elems();
+                auto seps = result.value().seps();
                 T t_result = elements[0];
                 for (std::size_t i = 1; i < elements.size(); ++i) {
                     for (const auto& [op, func] : operators) {
@@ -250,7 +265,7 @@ namespace Parsec {
                 return Result<T>{t_result, result.rest()};
             }
         private:
-            Parser<std::pair<std::vector<T>, std::vector<U>>> parser;
+            Parser<SeqWithSeps<T, U>> parser;
             std::vector<std::pair<U, std::function<T(T, T)>>> operators;
         };
 

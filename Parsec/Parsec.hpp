@@ -105,10 +105,8 @@ namespace Parsec {
     }
 
     template<typename T, typename U>
-    Parser<std::pair<std::vector<T>, std::vector<U>>> seq_save(Parser<T> elem_parser, Parser<U> sep_parser) {
-        return make_parser<std::pair<std::vector<T>, std::vector<U>>,
-                           Util::ISeqSaverParser<T, U>>
-                (std::move(elem_parser), std::move(sep_parser));
+    Parser<Util::SeqWithSeps<T, U>> seq_save(Parser<T> elem_parser, Parser<U> sep_parser) {
+        return make_parser<Util::SeqWithSeps<T, U>, Util::ISeqSaverParser<T, U>>(std::move(elem_parser), std::move(sep_parser));
     }
 
     template<typename T, typename BL, typename BR>
@@ -117,7 +115,7 @@ namespace Parsec {
     }
 
     template<typename T, typename U>
-    Parser<T> fold(Parser<std::pair<std::vector<T>, std::vector<U>>> vec_parser, std::vector<std::pair<U, std::function<T(T, T)>>> operators) {
+    Parser<T> fold(Parser<Util::SeqWithSeps<T, U>> vec_parser, std::vector<std::pair<U, std::function<T(T, T)>>> operators) {
         return make_parser<T, Util::IFoldParser<T, U>>(std::move(vec_parser), std::move(operators));
     }
 
