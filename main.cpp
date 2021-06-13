@@ -14,7 +14,11 @@ int main() {
         if (result && result.rest().empty()) {
             std::cout << result.value() << '\n';
         } else {
-            std::cout << "error: parsing failed\n";
+            if (result) {
+                std::cout << "error: Parsing failed. Part from position " << str.size() - result.rest().size() + 1 << " not parsed." << '\n';
+            } else {
+                std::cout << "error: Parsing failed. Message: " << result.get_message() << '\n';
+            }
         }
     }
 }

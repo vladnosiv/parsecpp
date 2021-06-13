@@ -17,14 +17,25 @@ namespace Parsec {
             T value() { return tvalue; }
             std::string_view rest() { return srest; }
 
+            void set_error(std::string msg) {
+                has_value = false;
+                error_message = std::move(msg);
+            }
+            std::string get_message() { return error_message; }
+
         private:
             T tvalue;
             std::string_view srest;
             bool has_value = false;
+            std::string error_message;
         };
 
         template<typename T>
-        Result<T> nullres() { return Result<T>(); }
+        Result<T> nullres(std::string message) {
+            Result<T> res;
+            res.set_error(std::move(message));
+            return res;
+        }
 
         template<typename T>
         struct IParser {
@@ -53,7 +64,11 @@ namespace Parsec {
 
             Result<char> parse(std::string_view str) override {
                 if (str.empty() || str[0] != target) {
-                    return nullres<char>();
+                    std::string msg = "Expected ";
+                    msg.push_back(target);
+                    msg.append(". But received ");
+                    msg.push_back(str[0]);
+                    return nullres<char>(std::move(msg));
                 }
                 std::string_view rest = str.substr(1);
                 return Result<char>{target, rest};
@@ -68,7 +83,7 @@ namespace Parsec {
 
             Result<char> parse(std::string_view str) override {
                 if (str.empty()) {
-                    return nullres<char>();
+                    return nullres<char>("Expected chars but string is empty.");
                 }
                 for (char c : targets) {
                     if (str[0] == c) {
@@ -76,7 +91,7 @@ namespace Parsec {
                         return Result<char>{c, rest};
                     }
                 }
-                return nullres<char>();
+                return nullres<char>("Expected chars but not matched");
             }
 
         private:
@@ -93,7 +108,9 @@ namespace Parsec {
                     starts_with_target &= target[i] == str[i];
                 }
                 if (!starts_with_target) {
-                    return nullres<std::string_view>();
+                    std::string msg = "Expected prefix ";
+                    msg += target;
+                    return nullres<std::string_view>(std::move(msg));
                 }
                 return Result<std::string_view>(target, str.substr(target.size()));
             }
@@ -146,11 +163,11 @@ namespace Parsec {
             Result<R> parse(std::string_view str) override {
                 auto res1 = p1.parse(str);
                 if (!res1) {
-                    return nullres<R>();
+                    return nullres<R>(res1.get_message());
                 }
                 auto res2 = p2.parse(res1.rest());
                 if (!res2) {
-                    return nullres<R>();
+                    return nullres<R>(res2.get_message());
                 }
                 return Result<R>(f(res1.value(), res2.value()), res2.rest());
             }
@@ -166,7 +183,7 @@ namespace Parsec {
 
             Result<T> parse(std::string_view str) override {
                 if (!str.empty()) {
-                    return nullres<T>();
+                    return nullres<T>("Expected empty string.");
                 }
                 return Result<T>(target, str);
             }
@@ -181,7 +198,7 @@ namespace Parsec {
 
             Result<T> parse(std::string_view str) override {
                 if (str.empty()) {
-                    return nullres<T>();
+                    return nullres<T>("Expected not empty string.");
                 }
                 return parser.parse(str);
             }
@@ -197,7 +214,7 @@ namespace Parsec {
             Result<T> parse(std::string_view str) override {
                 auto res_skip = skip_parser.parse(str);
                 if (!res_skip) {
-                    return nullres<T>();
+                    return nullres<T>(res_skip.get_message());
                 }
                 str = res_skip.rest();
                 return parser.parse(str);
@@ -215,7 +232,7 @@ namespace Parsec {
             Result<std::vector<T>> parse(std::string_view str) override {
                 auto head = elem_parser.parse(str);
                 if (!head) {
-                    return nullres<std::vector<T>>();
+                    return nullres<std::vector<T>>(head.get_message());
                 }
                 std::vector<T> results = {head.value()};
                 str = head.rest();
@@ -231,6 +248,26 @@ namespace Parsec {
             Parser<U> sep_parser;
         };
 
+        template<typename T>
+        struct IBanParser : IParser<T> {
+            explicit IBanParser(Parser<T> parser_, T val)
+                : parser(std::move(parser_)), ban_value(std::move(val)) {}
+
+            Result<T> parse(std::string_view str) override {
+                auto res = parser.parse(str);
+                if (!res) {
+                    return nullres<T>(res.get_message());
+                }
+                if (res.value() == ban_value) {
+                    return nullres<T>("Expected any value except banned value.");
+                }
+                return res;
+            }
+        private:
+            Parser<T> parser;
+            T ban_value;
+        };
+
         template<typename T, typename BL, typename BR>
         struct IBrParser : IParser<T> {
             explicit IBrParser(Parser<T> elem_parser_,
@@ -241,18 +278,18 @@ namespace Parsec {
             Result<T> parse(std::string_view str) override {
                 auto left_result = left_parser.parse(str);
                 if (!left_result) {
-                    return nullres<T>();
+                    return nullres<T>(left_result.get_message());
                 }
                 str = left_result.rest();
                 auto elem_result = elem_parser.parse(str);
                 if (!elem_result) {
-                    return nullres<T>();
+                    return nullres<T>(elem_result.get_message());
                 }
                 T result = elem_result.value();
                 str = elem_result.rest();
                 auto right_result = right_parser.parse(str);
                 if (!right_result) {
-                    return nullres<T>();
+                    return nullres<T>(right_result.get_message());
                 }
                 return Result<T>{result, right_result.rest()};
             }
@@ -285,7 +322,7 @@ namespace Parsec {
             Result<SeqWithSeps<T, U>> parse(std::string_view str) override {
                 auto head = elem_parser.parse(str);
                 if (!head) {
-                    return nullres<SeqWithSeps<T, U>>();
+                    return nullres<SeqWithSeps<T, U>>(head.get_message());
                 }
                 std::vector<T> results = {head.value()};
                 std::vector<U> seps;
@@ -303,6 +340,9 @@ namespace Parsec {
                     results.push_back(elem_result.value());
                     seps.push_back(sep_result.value());
                 }
+                while (seps.size() + 1 > results.size()) {
+                    seps.pop_back();
+                }
                 return Result<SeqWithSeps<T, U>>{SeqWithSeps(results, seps), str};
             }
         private:
@@ -318,7 +358,7 @@ namespace Parsec {
             Result<T> parse(std::string_view str) override {
                 auto result = parser.parse(str);
                 if (!result) {
-                    return nullres<T>();
+                    return nullres<T>(result.get_message());
                 }
                 auto elements = result.value().elems();
                 auto seps = result.value().seps();
@@ -338,6 +378,17 @@ namespace Parsec {
             std::vector<std::pair<U, std::function<T(T, T)>>> operators;
         };
 
+        template<typename T>
+        struct IIdParser : IParser<T> {
+            explicit IIdParser(T val_) : val(val_) {}
+
+            Result<T> parse(std::string_view str) override {
+                return Result<T>(val, str);
+            }
+        private:
+            T val;
+        };
+
         template<typename T, typename R, typename Func>
         struct IFMapParser : IParser<R> {
             explicit IFMapParser(Parser<T> parser_, Func f_)
@@ -346,7 +397,7 @@ namespace Parsec {
             Result<R> parse(std::string_view str) override {
                 auto result = parser.parse(str);
                 if (!result) {
-                    return nullres<R>();
+                    return nullres<R>(result.get_message());
                 }
                 return Result<R>{f(result.value()), result.rest()};
             }

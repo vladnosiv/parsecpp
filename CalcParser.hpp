@@ -7,7 +7,7 @@
 
 namespace CalcParser {
 
-    namespace Util {
+    namespace Internal {
 
         using namespace Parsec;
 
@@ -23,7 +23,11 @@ namespace CalcParser {
         }
 
         Parser<int64_t> roman_brackets() {
-            return brackets_parser(char_parser('('), lazy_parser<int64_t>(roman_expr), char_parser(')'));
+            // На самом деле исходя из грамматики, здесь должен быть только один второй случай,
+            // Но если сделать так, то слишком просто построить пример, на котором парсер работает медленно
+            // А так начинают быстрее работать всякие ((((((I)))))) и похожие примеры
+            return brackets_parser(char_parser('('), lazy_parser<int64_t>(roman_brackets), char_parser(')'))
+                 | brackets_parser(char_parser('('), lazy_parser<int64_t>(roman_expr), char_parser(')'));
         }
 
         Parser<int64_t> roman_atom() {
@@ -53,7 +57,7 @@ namespace CalcParser {
     } // namespace Internal
 
     Parsec::Parser<int64_t> roman_calc() {
-        return Util::roman_expr();
+        return Internal::roman_expr();
     }
 
 } // namespace CalcParser
