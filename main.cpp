@@ -8,14 +8,13 @@ int main() {
     auto parser = CalcParser::roman_calc();
 
     //std::string n = "MMMCCCXXI*MMMMMMMMMCXXIII/(II*IV+(-(-I)))"; // 3321*9123/(2*4+(-(-1))) = 3366387
-
     std::string str;
     while (std::cin >> str) {
         auto result = parser.parse(str);
         if (result && result.rest().empty()) {
             std::cout << result.value() << '\n';
         } else {
-            std::cout << "error: starting from position " << str.size() - result.rest().size() + 1 << ", parsing failed\n";
+            std::cout << "error: parsing failed\n";
         }
     }
 }

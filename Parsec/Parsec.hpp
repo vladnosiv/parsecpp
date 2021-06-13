@@ -49,6 +49,27 @@ namespace Parsec {
         return make_parser<char, Internal::ICharsParser>(std::move(chars));
     }
 
+    Parser<std::string_view> prefix_parser(std::string_view str) {
+        return make_parser<std::string_view, Internal::IPrefixParser>(str);
+    }
+
+    template<typename T, typename U, typename R, typename Func>
+    Parser<R> merge_parser(Parser<T> p1, Parser<U> p2, Func f) {
+        return make_parser<R, Internal::IMergeParser<T, U, R, Func>>(std::move(p1), std::move(p2), std::move(f));
+    }
+
+    // if string is empty return default_value
+    template<typename T>
+    Parser<T> empty_parser(T default_value) {
+        return make_parser<T, Internal::IEmptyParser<T>>(std::move(default_value));
+    }
+
+    // if string is empty return nullres even if parse is success
+    template<typename T>
+    Parser<T> not_empty_str(Parser<T> parser) {
+        return make_parser<T, Internal::INotEmptyParser<T>>(std::move(parser));
+    }
+
     template<typename T>
     Parser<std::vector<T>> many(Parser<T> parser) {
         return make_parser<std::vector<T>, Internal::IManyParser<T>>(std::move(parser));

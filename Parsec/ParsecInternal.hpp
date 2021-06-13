@@ -83,6 +83,24 @@ namespace Parsec {
             std::vector<char> targets;
         };
 
+        struct IPrefixParser : IParser<std::string_view> {
+            explicit IPrefixParser(std::string_view target_)
+                : target(target_) {}
+
+            Result<std::string_view> parse(std::string_view str) override {
+                bool starts_with_target = true;
+                for (std::size_t i = 0; i < target.size(); ++i) {
+                    starts_with_target &= target[i] == str[i];
+                }
+                if (!starts_with_target) {
+                    return nullres<std::string_view>();
+                }
+                return Result<std::string_view>(target, str.substr(target.size()));
+            }
+        private:
+            std::string_view target;
+        };
+
         template<typename T>
         struct IManyParser : IParser<std::vector<T>> {
             explicit IManyParser(Parser<T> p) : parser(std::move(p)) {}
@@ -115,6 +133,57 @@ namespace Parsec {
                     return Result<T>{0, many_result.rest()};
                 }
                 return Result<T>{many_result.value()[0], many_result.rest()};
+            }
+        private:
+            Parser<T> parser;
+        };
+
+        template<typename T, typename U, typename R, typename Func>
+        struct IMergeParser : IParser<R> {
+            explicit IMergeParser(Parser<T> p1_, Parser<U> p2_, Func f_)
+                : p1(std::move(p1_)), p2(std::move(p2_)), f(std::move(f_)) {}
+
+            Result<R> parse(std::string_view str) override {
+                auto res1 = p1.parse(str);
+                if (!res1) {
+                    return nullres<R>();
+                }
+                auto res2 = p2.parse(res1.rest());
+                if (!res2) {
+                    return nullres<R>();
+                }
+                return Result<R>(f(res1.value(), res2.value()), res2.rest());
+            }
+        private:
+            Parser<T> p1;
+            Parser<U> p2;
+            Func f;
+        };
+
+        template<typename T>
+        struct IEmptyParser : IParser<T> {
+            explicit IEmptyParser(T t) : target(std::move(t)) {}
+
+            Result<T> parse(std::string_view str) override {
+                if (!str.empty()) {
+                    return nullres<T>();
+                }
+                return Result<T>(target, str);
+            }
+        private:
+            T target;
+        };
+
+        template<typename T>
+        struct INotEmptyParser : IParser<T> {
+            explicit INotEmptyParser(Parser<T> parser_)
+                : parser(std::move(parser_)) {}
+
+            Result<T> parse(std::string_view str) override {
+                if (str.empty()) {
+                    return nullres<T>();
+                }
+                return parser.parse(str);
             }
         private:
             Parser<T> parser;
