@@ -46,7 +46,7 @@ namespace CalcParser {
         }
 
         Parser<int64_t> roman_brackets() {
-            // На самом деле исходя из грамматики, здесь должен быть только один второй случай,
+            // На самом деле, исходя из грамматики, здесь должен быть только один второй случай,
             // Но если сделать так, то слишком просто построить пример, на котором парсер работает медленно
             // А так начинают быстрее работать всякие ((((((I)))))) и похожие примеры
             return brackets_parser(char_parser('('), lazy_parser<int64_t>(roman_brackets), char_parser(')'))
@@ -85,6 +85,16 @@ namespace CalcParser {
 
     void print_arabic_numeral_to_roman(int64_t x) {
         Internal::RomanNumerals::print_arabic_numeral_to_roman(x);
+    }
+
+    std::string remove_all_spaces(const std::string& str) {
+        std::string new_str;
+        for (char c : str) {
+            if (c != ' ' && c != '\t') {
+                new_str.push_back(c);
+            }
+        }
+        return new_str;
     }
 
 } // namespace CalcParser

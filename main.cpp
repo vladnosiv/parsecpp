@@ -1,7 +1,6 @@
 #include "CalcParser.hpp"
 
 #include <string>
-#include <string_view>
 #include <iostream>
 
 int main() {
@@ -9,7 +8,8 @@ int main() {
 
     //std::string n = "MMMCCCXXI*MMMMMMMMMCXXIII/(II*IV+(-(-I)))"; // 3321*9123/(2*4+(-(-1))) = 3366387
     std::string str;
-    while (std::cin >> str) {
+    while (std::getline(std::cin, str)) {
+        str = CalcParser::remove_all_spaces(str);
         try {
             auto result = parser.parse(str);
             if (result && result.rest().empty()) {
