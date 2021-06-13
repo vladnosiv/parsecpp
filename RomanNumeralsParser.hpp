@@ -98,5 +98,41 @@ namespace CalcParser::Internal {
         Parser<int64_t> roman_numeral() {
             return if_equal_not_parsed<int64_t>(roman_numeral_1000(), 0) | roman_numeral_zero();
         }
+
+        void print_arabic_numeral_to_roman(int64_t x) {
+            if (x / 1000 > 1'000'000) {
+                std::cout << "Result is too big for print\n";
+                return;
+            }
+            if (x == 0) {
+                std::cout << "Z\n";
+                return;
+            }
+            for (int i = 0; i < x / 1000; ++i) {
+                std::cout << 'M';
+            }
+            x %= 1000;
+            std::vector<std::pair<int, std::string>> digits = {
+                    {900, "CM"},
+                    {500, "D"},
+                    {400, "CD"},
+                    {100, "C"},
+                    {90, "XC"},
+                    {50, "L"},
+                    {40, "XL"},
+                    {10, "X"},
+                    {9, "IX"},
+                    {5, "V"},
+                    {4, "IV"},
+                    {1, "I"}
+            };
+            for (auto& [val, digit] : digits) {
+                while (x >= val) {
+                    std::cout << digit;
+                    x -= val;
+                }
+            }
+            std::cout << '\n';
+        }
     }
 }

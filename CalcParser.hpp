@@ -1,6 +1,29 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
+#include <stdexcept>
+
+inline void check_mlt_overflow(std::int64_t a, std::int64_t b) {
+    if (b != 0 && (a > std::numeric_limits<std::int64_t>::max() / b
+               ||  a < std::numeric_limits<std::int64_t>::min() / b)) {
+        throw std::overflow_error("");
+    }
+}
+
+inline void check_plus_overflow(std::int64_t a, std::int64_t b) {
+    if ((b > 0 && a > std::numeric_limits<std::int64_t>::max() - b)
+      || (b < 0 && a < std::numeric_limits<std::int64_t>::min() - b)) {
+        throw std::overflow_error("");
+    }
+}
+
+inline void check_minus_overflow(std::int64_t a, std::int64_t b) {
+    if ((b < 0 && a > std::numeric_limits<std::int64_t>::max() + b)
+      || (b > 0 && a < std::numeric_limits<std::int64_t>::min() + b)) {
+        throw std::overflow_error("");
+    }
+}
 
 #include "Parsec/Parsec.hpp"
 #include "RomanNumeralsParser.hpp"
@@ -38,7 +61,7 @@ namespace CalcParser {
             return fold(
                 seq_save(roman_atom(), char_parser('*') | char_parser('/')),
                 {
-                        {'*', [](int64_t a, int64_t b) { return a * b; }},
+                        {'*', [](int64_t a, int64_t b) { check_mlt_overflow(a, b); return a * b; }},
                         {'/', [](int64_t a, int64_t b) { return a / b; }}
                 }
             );
@@ -48,8 +71,8 @@ namespace CalcParser {
             return fold(
                 seq_save(roman_mlt_div(), char_parser('+') | char_parser('-')),
                 {
-                        {'+', [](int64_t a, int64_t b) { return a + b; }},
-                        {'-', [](int64_t a, int64_t b) { return a - b; }}
+                        {'+', [](int64_t a, int64_t b) { check_plus_overflow(a, b); return a + b; }},
+                        {'-', [](int64_t a, int64_t b) { check_minus_overflow(a, b); return a - b; }}
                 }
             );
         }
@@ -58,6 +81,10 @@ namespace CalcParser {
 
     Parsec::Parser<int64_t> roman_calc() {
         return Internal::roman_expr();
+    }
+
+    void print_arabic_numeral_to_roman(int64_t x) {
+        Internal::RomanNumerals::print_arabic_numeral_to_roman(x);
     }
 
 } // namespace CalcParser
