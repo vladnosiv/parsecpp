@@ -1,5 +1,8 @@
 #pragma once
 
+#include <sstream>
+#include <cmath>
+
 #include "Parsec/Parsec.hpp"
 
 namespace CalcParser::Internal {
@@ -99,17 +102,22 @@ namespace CalcParser::Internal {
             return if_equal_not_parsed<int64_t>(roman_numeral_1000(), 0) | roman_numeral_zero();
         }
 
-        void print_arabic_numeral_to_roman(int64_t x) {
-            if (x / 1000 > 1'000'000) {
-                std::cout << "Result is too big for print\n";
-                return;
+        std::stringstream print_arabic_numeral_to_roman(int64_t x) {
+            std::stringstream ss;
+            if (std::abs(x) / 1000 > 1'000'000) {
+                ss << "Result is too big for print\n";
+                return ss;
             }
             if (x == 0) {
-                std::cout << "Z\n";
-                return;
+                ss << "Z\n";
+                return ss;
+            }
+            if (x < 0) {
+                ss << '-';
+                x = -x;
             }
             for (int i = 0; i < x / 1000; ++i) {
-                std::cout << 'M';
+                ss << 'M';
             }
             x %= 1000;
             std::vector<std::pair<int, std::string>> digits = {
@@ -128,11 +136,12 @@ namespace CalcParser::Internal {
             };
             for (auto& [val, digit] : digits) {
                 while (x >= val) {
-                    std::cout << digit;
+                    ss << digit;
                     x -= val;
                 }
             }
-            std::cout << '\n';
+            ss << '\n';
+            return ss;
         }
     }
 }

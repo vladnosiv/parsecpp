@@ -83,8 +83,8 @@ namespace CalcParser {
         return Internal::roman_expr();
     }
 
-    void print_arabic_numeral_to_roman(int64_t x) {
-        Internal::RomanNumerals::print_arabic_numeral_to_roman(x);
+    std::stringstream arabic_numeral_to_roman(int64_t x) {
+        return Internal::RomanNumerals::print_arabic_numeral_to_roman(x);
     }
 
     std::string remove_all_spaces(const std::string& str) {
