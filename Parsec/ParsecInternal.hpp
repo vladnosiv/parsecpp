@@ -40,6 +40,7 @@ namespace Parsec {
         template<typename T>
         struct IParser {
             virtual Result<T> parse(std::string_view) = 0;
+            virtual ~IParser() = default;
         };
 
         template<typename T>
