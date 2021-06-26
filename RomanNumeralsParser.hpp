@@ -23,8 +23,8 @@ namespace CalcParser::Internal {
 
         Parser<int64_t> roman_numeral_1() { // 1-3 repeats
             return map_parser(prefix_parser("III") >> roman_numeral_terminal(), [](int64_t a) { return a + 3; })
-                 | map_parser(prefix_parser("II") >> roman_numeral_terminal(), [](int64_t a) { return a + 2; })
-                 | map_parser(prefix_parser("I") >> roman_numeral_terminal(), [](int64_t a) { return a + 1; })
+                 | map_parser(prefix_parser("II")  >> roman_numeral_terminal(), [](int64_t a) { return a + 2; })
+                 | map_parser(prefix_parser("I")   >> roman_numeral_terminal(), [](int64_t a) { return a + 1; })
                  | roman_numeral_terminal();
         }
 

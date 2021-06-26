@@ -62,7 +62,8 @@ namespace CalcParser {
                 seq_save(roman_atom(), char_parser('*') | char_parser('/')),
                 {
                         {'*', [](int64_t a, int64_t b) { check_mlt_overflow(a, b); return a * b; }},
-                        {'/', [](int64_t a, int64_t b) { return a / b; }}
+                        {'/', [](int64_t a, int64_t b) { return a / b - (((a < 0) ^ (b < 0)) && (a % b != 0)); }} 
+                        // -5/-2 = 2, -5/2 = -3, 5/-2 = -3, 5/2 = 2 НО! 2/-2 = -1
                 }
             );
         }

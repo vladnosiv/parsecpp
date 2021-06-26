@@ -52,6 +52,25 @@ TEST(CHECK_OVERFLOW) {
     ASSERT(overflow_error);
 }
 
+TEST(NEGATIVE_AND_DIV) {
+    auto parser = CalcParser::Internal::roman_expr();
+
+    auto res1 = parser.parse("V/II");
+    ASSERT(res1 && res1.value() == 2);
+
+    auto res2 = parser.parse("-V/II");
+    ASSERT(res2 && res2.value() == -3);
+
+    auto res3 = parser.parse("V/-II");
+    ASSERT(res3 && res3.value() == -3);
+
+    auto res4 = parser.parse("-V/-II");
+    ASSERT(res4 && res4.value() == 2);
+
+    auto res5 = parser.parse("II/-II");
+    ASSERT(res5 && res5.value() == -1);
+}
+
 int main() {
     RUN_ALL_TESTS;
 }
