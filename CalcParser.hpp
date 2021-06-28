@@ -11,6 +11,15 @@ inline void check_mlt_overflow(std::int64_t a, std::int64_t b) {
     }
 }
 
+inline void check_div_overflow(std::int64_t a, std::int64_t b) {
+    if (b == 0) {
+        throw std::overflow_error("");
+    }
+    if (a == std::numeric_limits<std::int64_t>::min() && b == -1) {
+        throw std::overflow_error("");
+    }
+}
+
 inline void check_plus_overflow(std::int64_t a, std::int64_t b) {
     if ((b > 0 && a > std::numeric_limits<std::int64_t>::max() - b)
       || (b < 0 && a < std::numeric_limits<std::int64_t>::min() - b)) {
@@ -61,8 +70,15 @@ namespace CalcParser {
             return fold(
                 seq_save(roman_atom(), char_parser('*') | char_parser('/')),
                 {
-                        {'*', [](int64_t a, int64_t b) { check_mlt_overflow(a, b); return a * b; }},
-                        {'/', [](int64_t a, int64_t b) { return a / b - (((a < 0) ^ (b < 0)) && (a % b != 0)); }} 
+                        {'*', [](int64_t a, int64_t b) { 
+                            check_mlt_overflow(a, b); 
+                            return a * b; 
+                        }},
+
+                        {'/', [](int64_t a, int64_t b) { 
+                            check_div_overflow(a, b);
+                            return a / b - (((a < 0) ^ (b < 0)) && (a % b != 0)); 
+                        }} 
                         // -5/-2 = 2, -5/2 = -3, 5/-2 = -3, 5/2 = 2 НО! 2/-2 = -1
                 }
             );

@@ -71,6 +71,18 @@ TEST(NEGATIVE_AND_DIV) {
     ASSERT(res5 && res5.value() == -1);
 }
 
+TEST(DIV_BY_ZERO) {
+    auto parser = CalcParser::Internal::roman_expr();
+
+    bool overflow_error = false;
+    try {
+        auto res = parser.parse("I/Z");
+    } catch (const std::overflow_error&) {
+        overflow_error = true;
+    }
+    ASSERT(overflow_error);
+}
+
 int main() {
     RUN_ALL_TESTS;
 }
